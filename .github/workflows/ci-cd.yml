@@ -1,0 +1,205 @@
+name: E-Commerce App CI/CD with Java Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  NODE_VERSION: '18'
+  JAVA_VERSION: '11'
+  ADMIN_EMAIL: 'admin@ecommerce.com'
+  ADMIN_PASSWORD: 'admin123'
+  TEST_USER_EMAIL: 'user@test.com'
+  TEST_USER_PASSWORD: 'user123'
+
+jobs:
+  # Build and test the application
+  build-and-test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Create environment file
+      run: |
+        cp backend/.env.example backend/.env
+    
+    - name: Build and start services
+      run: |
+        docker compose up -d --build
+        
+    - name: Wait for services to be ready
+      run: |
+        echo "Waiting for backend to be ready..."
+        timeout 120 bash -c 'until curl -f http://localhost:5001/api/health; do sleep 2; done'
+        echo "Waiting for frontend to be ready..."
+        timeout 120 bash -c 'until curl -f http://localhost:3000; do sleep 2; done'
+    
+    - name: Run database migrations and seed
+      run: |
+        docker compose exec -T backend npx prisma db push
+        docker compose exec -T backend npm run seed
+    
+    - name: Set up Java
+      uses: actions/setup-java@v4
+      with:
+        java-version: ${{ env.JAVA_VERSION }}
+        distribution: 'temurin'
+    
+    - name: Cache Maven dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.m2
+        key: ${{ runner.os }}-m2-${{ hashFiles('tests/java-playwright/pom.xml') }}
+        restore-keys: ${{ runner.os }}-m2
+    
+    - name: Install Playwright browsers
+      working-directory: tests/java-playwright
+      run: |
+        mvn exec:java -e -D exec.mainClass=com.microsoft.playwright.CLI -D exec.args="install --with-deps"
+    
+    - name: Run Java Playwright tests
+      working-directory: tests/java-playwright
+      run: |
+        mvn clean test -Dbase.url=http://localhost:3000 -Dapi.url=http://localhost:5001/api -Dheadless=true
+      env:
+        BASE_URL: http://localhost:3000
+        API_URL: http://localhost:5001/api
+    
+    - name: Generate Allure report
+      working-directory: tests/java-playwright
+      if: always()
+      run: |
+        mvn allure:report
+    
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: java-test-results
+        path: |
+          tests/java-playwright/target/surefire-reports/
+          tests/java-playwright/target/allure-results/
+          tests/java-playwright/target/site/allure-maven-plugin/
+          tests/java-playwright/screenshots/
+        retention-days: 30
+    
+    - name: Upload Allure report to GitHub Pages
+      if: always()
+      uses: peaceiris/actions-gh-pages@v3
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: tests/java-playwright/target/site/allure-maven-plugin
+        destination_dir: test-reports/${{ github.run_number }}
+    
+    - name: Comment test results on PR
+      if: github.event_name == 'pull_request' && always()
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const path = require('path');
+          const resultsDir = 'tests/java-playwright/target/surefire-reports';
+          
+          if (fs.existsSync(resultsDir)) {
+            const xmlFiles = fs.readdirSync(resultsDir).filter(f => f.endsWith('.xml'));
+            let totalTests = 0;
+            let failures = 0;
+            let errors = 0;
+            let skipped = 0;
+            
+            // Parse XML files for test results (simplified)
+            xmlFiles.forEach(file => {
+              const content = fs.readFileSync(path.join(resultsDir, file), 'utf8');
+              const testMatch = content.match(/tests="(\d+)"/);
+              const failureMatch = content.match(/failures="(\d+)"/);
+              const errorMatch = content.match(/errors="(\d+)"/);
+              const skippedMatch = content.match(/skipped="(\d+)"/);
+              
+              if (testMatch) totalTests += parseInt(testMatch[1]);
+              if (failureMatch) failures += parseInt(failureMatch[1]);
+              if (errorMatch) errors += parseInt(errorMatch[1]);
+              if (skippedMatch) skipped += parseInt(skippedMatch[1]);
+            });
+            
+            const passed = totalTests - failures - errors - skipped;
+            
+            const comment = `## 🧪 Java Playwright Test Results
+            
+            - ✅ **Passed**: ${passed}
+            - ❌ **Failed**: ${failures + errors}
+            - ⏭️ **Skipped**: ${skipped}
+            - � **Total**: ${totalTests}
+            
+            � [View detailed Allure report](https://your-username.github.io/repo-name/test-reports/${{ github.run_number }})
+            `;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+          }
+    
+    - name: Cleanup
+      if: always()
+      run: |
+        docker compose down -v
+
+  # Security scanning
+  security-scan:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+    
+    - name: Upload Trivy scan results
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+  # Performance testing (optional)
+  performance-test:
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Docker
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Start application
+      run: |
+        cp backend/.env.example backend/.env
+        docker compose up -d --build
+        timeout 120 bash -c 'until curl -f http://localhost:3000; do sleep 2; done'
+    
+    - name: Run Lighthouse CI
+      uses: treosh/lighthouse-ci-action@v10
+      with:
+        urls: |
+          http://localhost:3000
+          http://localhost:3000/login
+          http://localhost:3000/products
+        configPath: '.lighthouserc.json'
+        uploadArtifacts: true
+        temporaryPublicStorage: true
