@@ -1,5 +1,9 @@
 name: E-Commerce App CI/CD with Java Tests
 
+permissions:
+  contents: read
+  security-events: write
+
 on:
   push:
     branches: [ main, develop ]
