@@ -48,3 +48,6 @@ Thumbs.db
 # Temporary files
 tmp/
 temp/
+
+# Copilot instructions (keep local, don't track in git)
+.github/copilot-instructions.md
