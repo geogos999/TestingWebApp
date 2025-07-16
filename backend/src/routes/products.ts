@@ -62,8 +62,13 @@ router.get('/', async (req, res) => {
       prisma.product.count({ where })
     ]);
 
+    // Convert price from Decimal (string) to number for each product
+    const productsWithNumberPrice = products.map((product: any) => ({
+      ...product,
+      price: typeof product.price === 'string' ? parseFloat(product.price) : Number(product.price)
+    }));
     res.json({
-      products,
+      products: productsWithNumberPrice,
       pagination: {
         total,
         page: parseInt(page as string),

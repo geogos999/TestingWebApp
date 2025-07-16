@@ -6,35 +6,57 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('🌱 Starting database seed...');
 
-  // Create categories
-  const electronics = await prisma.category.create({
-    data: {
+  // Create or update categories (idempotent)
+  const electronics = await prisma.category.upsert({
+    where: { name: 'Electronics' },
+    update: {
+      description: 'Electronic devices and gadgets',
+      imageUrl: 'https://images.unsplash.com/photo-1498049794561-7780e7231661?w=400'
+    },
+    create: {
       name: 'Electronics',
       description: 'Electronic devices and gadgets',
       imageUrl: 'https://images.unsplash.com/photo-1498049794561-7780e7231661?w=400'
     }
   });
 
-  const clothing = await prisma.category.create({
-    data: {
+  const clothing = await prisma.category.upsert({
+    where: { name: 'Clothing' },
+    update: {
+      description: 'Fashion and apparel',
+      imageUrl: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=400'
+    },
+    create: {
       name: 'Clothing',
       description: 'Fashion and apparel',
       imageUrl: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=400'
     }
   });
 
-  const books = await prisma.category.create({
-    data: {
+  const books = await prisma.category.upsert({
+    where: { name: 'Books' },
+    update: {
+      description: 'Books and literature',
+      imageUrl: 'https://images.unsplash.com/photo-1481627834876-b7833e8f5570?w=400'
+    },
+    create: {
       name: 'Books',
       description: 'Books and literature',
       imageUrl: 'https://images.unsplash.com/photo-1481627834876-b7833e8f5570?w=400'
     }
   });
 
-  // Create admin user
+  // Create or update admin user (idempotent)
   const hashedPassword = await bcrypt.hash('admin123', 12);
-  await prisma.user.create({
-    data: {
+  await prisma.user.upsert({
+    where: { email: 'admin@ecommerce.com' },
+    update: {
+      password: hashedPassword,
+      firstName: 'Admin',
+      lastName: 'User',
+      role: 'ADMIN'
+    },
+    create: {
       email: 'admin@ecommerce.com',
       password: hashedPassword,
       firstName: 'Admin',
@@ -43,10 +65,17 @@ async function main() {
     }
   });
 
-  // Create test user
+  // Create or update test user (idempotent)
   const testUserPassword = await bcrypt.hash('user123', 12);
-  await prisma.user.create({
-    data: {
+  await prisma.user.upsert({
+    where: { email: 'user@test.com' },
+    update: {
+      password: testUserPassword,
+      firstName: 'Test',
+      lastName: 'User',
+      role: 'USER'
+    },
+    create: {
       email: 'user@test.com',
       password: testUserPassword,
       firstName: 'Test',
@@ -154,9 +183,24 @@ async function main() {
     }
   ];
 
+  // Create or update products (idempotent by name and category)
   for (const product of products) {
-    await prisma.product.create({
-      data: product
+    await prisma.product.upsert({
+      where: {
+        name_categoryId: {
+          name: product.name,
+          categoryId: product.categoryId
+        }
+      },
+      update: {
+        description: product.description,
+        price: product.price,
+        imageUrl: product.imageUrl,
+        stock: product.stock,
+        featured: product.featured,
+        categoryId: product.categoryId
+      },
+      create: product
     });
   }
 

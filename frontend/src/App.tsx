@@ -1,6 +1,7 @@
 import React from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
+import { CartProvider } from './contexts/CartContext';
 
 // Components
 import Navbar from './components/Navbar';
@@ -32,6 +33,7 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <CartProvider>
       <Navbar />
       <main>
         <Routes>
@@ -77,6 +79,7 @@ function App() {
           } />
         </Routes>
       </main>
+      </CartProvider>
     </div>
   );
 }

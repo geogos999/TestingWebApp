@@ -5,7 +5,7 @@ import { authenticateToken, AuthRequest } from '../middleware/auth';
 const router = Router();
 const prisma = new PrismaClient();
 
-// Get user's orders
+// Get user's orders (ensure product.price is a number)
 router.get('/', authenticateToken, async (req: AuthRequest, res) => {
   try {
     const orders = await prisma.order.findMany({
@@ -20,7 +20,20 @@ router.get('/', authenticateToken, async (req: AuthRequest, res) => {
       orderBy: { createdAt: 'desc' }
     });
 
-    res.json(orders);
+    // Convert product.price to number for each order item
+    const ordersWithNumberPrice = orders.map(order => ({
+      ...order,
+      items: order.items.map((item: any) => ({
+        ...item,
+        price: typeof item.price === 'string' ? parseFloat(item.price) : Number(item.price),
+        product: item.product ? {
+          ...item.product,
+          price: typeof item.product.price === 'string' ? parseFloat(item.product.price) : Number(item.product.price)
+        } : item.product
+      }))
+    }));
+
+    res.json(ordersWithNumberPrice);
   } catch (error) {
     console.error('Error fetching orders:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -40,9 +53,10 @@ router.post('/checkout', authenticateToken, async (req: AuthRequest, res) => {
       return res.status(400).json({ error: 'Cart is empty' });
     }
 
-    // Calculate total
+    // Calculate total (ensure price is a number)
     const total = cartItems.reduce((sum, item) => {
-      return sum + (parseFloat(item.product.price.toString()) * item.quantity);
+      const price = typeof item.product.price === 'string' ? parseFloat(item.product.price) : Number(item.product.price);
+      return sum + (price * item.quantity);
     }, 0);
 
     // Create order with items
@@ -54,7 +68,7 @@ router.post('/checkout', authenticateToken, async (req: AuthRequest, res) => {
           create: cartItems.map(item => ({
             productId: item.productId,
             quantity: item.quantity,
-            price: item.product.price
+            price: typeof item.product.price === 'string' ? parseFloat(item.product.price) : Number(item.product.price)
           }))
         }
       },

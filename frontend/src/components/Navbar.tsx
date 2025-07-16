@@ -1,9 +1,12 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useCart } from '../contexts/CartContext';
 
 const Navbar: React.FC = () => {
+
   const { user, logout, isAuthenticated } = useAuth();
+  const { cart } = useCart();
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -34,10 +37,16 @@ const Navbar: React.FC = () => {
               <>
                 <Link 
                   to="/cart" 
-                  className="text-gray-700 hover:text-primary-600 px-3 py-2 rounded-md text-sm font-medium"
+                  className="relative text-gray-700 hover:text-primary-600 px-3 py-2 rounded-md text-sm font-medium flex items-center"
                   data-testid="cart-link"
                 >
+                  <span className="material-icons align-middle mr-1">shopping_cart</span>
                   Cart
+                  {cart.length > 0 && (
+                    <span className="absolute -top-1 -right-2 bg-primary-600 text-white text-xs rounded-full px-1.5 py-0.5 font-bold" data-testid="cart-count">
+                      {cart.reduce((sum, item) => sum + item.quantity, 0)}
+                    </span>
+                  )}
                 </Link>
                 <Link 
                   to="/orders" 

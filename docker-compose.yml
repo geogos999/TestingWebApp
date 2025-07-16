@@ -30,12 +30,11 @@ services:
       - "5001:5000"
     depends_on:
       - postgres
-    volumes:
-      - ./backend:/app
-      - /app/node_modules
+    # volumes:
+    #   - ./backend:/app
     networks:
       - ecommerce-network
-    command: npm run dev
+    command: sh -c "npx wait-port postgres:5432 && npx prisma migrate deploy && npm run seed && npm run dev"
 
   # Frontend React App
   frontend:

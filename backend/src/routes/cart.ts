@@ -5,7 +5,7 @@ import { authenticateToken, AuthRequest } from '../middleware/auth';
 const router = Router();
 const prisma = new PrismaClient();
 
-// Get user's cart
+// Get user's cart (ensure product.price is a number)
 router.get('/', authenticateToken, async (req: AuthRequest, res) => {
   try {
     const cartItems = await prisma.cartItem.findMany({
@@ -19,15 +19,24 @@ router.get('/', authenticateToken, async (req: AuthRequest, res) => {
       }
     });
 
-    res.json(cartItems);
+    // Convert product.price to number for each cart item
+    const cartItemsWithNumberPrice = cartItems.map((item: any) => ({
+      ...item,
+      product: {
+        ...item.product,
+        price: typeof item.product.price === 'string' ? parseFloat(item.product.price) : Number(item.product.price)
+      }
+    }));
+
+    res.json(cartItemsWithNumberPrice);
   } catch (error) {
     console.error('Error fetching cart:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// Add item to cart
-router.post('/add', authenticateToken, async (req: AuthRequest, res) => {
+// Add item to cart (RESTful: POST /cart)
+router.post('/', authenticateToken, async (req: AuthRequest, res) => {
   try {
     const { productId, quantity = 1 } = req.body;
 
