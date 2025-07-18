@@ -5,7 +5,7 @@ const HomePage: React.FC = () => {
   return (
     <div className="min-h-screen" data-testid="home-page">
       {/* Hero Section */}
-      <section className="bg-primary-600 text-white py-20">
+      <section className="bg-primary-600 text-white py-20" data-testid="hero-section">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h1 className="text-4xl md:text-6xl font-bold mb-6" data-testid="hero-title">
             Welcome to E-Commerce Test App
